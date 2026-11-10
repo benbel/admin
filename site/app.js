@@ -354,7 +354,7 @@ function rendFormulaire(id) {
     });
   }
   if (formulaire.type === "scinder") {
-    return formulaireNom("Nom du nouveau service", "", (v, f) => {
+    return formulaireNom("Nom du service créé par scission de " + s.nom, "", (v, f) => {
       const enfants = [...f.querySelectorAll("input[type=checkbox]:checked")].map(c => c.value);
       const nouveau = identifiant();
       ouverts.add(service(id).parent);
@@ -392,16 +392,15 @@ function rendSelection() {
     selection.append(ul);
   }
   if (s.supprime) return;
-  if (mode) return;
   const actions = element("div", "actions");
-  const ouvre = type => () => { formulaire = { type: type }; rend(); };
+  const ouvre = type => () => { formulaire = { type: type }; mode = null; rend(); };
   if (id === RACINE) {
     actions.append(bouton("créer un ministère", ouvre("creer")));
   } else {
     if (s.enfants.length && id !== focus) actions.append(bouton("recentrer", () => recentre(id)));
     actions.append(bouton("renommer", ouvre("renommer")));
     actions.append(bouton("créer un sous-service", ouvre("creer")));
-    if (actifs(id).length > 1) actions.append(bouton("scinder", ouvre("scinder")));
+    actions.append(bouton("scinder", ouvre("scinder")));
     actions.append(bouton("fusionner avec…", () => { mode = { type: "fusionner", id: id }; formulaire = null; rend(); }));
     actions.append(bouton("rattacher à…", () => { mode = { type: "deplacer", id: id }; formulaire = null; rend(); }));
     actions.append(bouton("supprimer", () => enregistre({ op: "supprimer", id: id })));

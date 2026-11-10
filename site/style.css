@@ -39,8 +39,21 @@ input {
   max-width: 100%;
 }
 
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5em 2em;
+  margin-bottom: 1.5em;
+}
+
+header p {
+  margin: 0;
+}
+
 h1 {
   font-size: 1.3em;
+  margin: 0;
 }
 
 h2 {
@@ -198,9 +211,6 @@ li::before {
 
 #choix {
   margin: 0;
-  padding: 0.4em 0.6em;
-  border: 1px solid #111111;
-  border-radius: 6px;
 }
 
 #choix input {
@@ -210,4 +220,8 @@ li::before {
 #choix button {
   margin-left: 1em;
   text-decoration: underline;
+}
+
+input:focus {
+  outline: none;
 }
