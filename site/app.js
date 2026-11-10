@@ -246,7 +246,7 @@ function branche(id, contient) {
   const bloc = element("div", "branche");
   const boite = element("div", "service");
   const ouvert = ouverts.has(id) && s.enfants.length > 0;
-  const horizontal = ancetres(id).length % 2 === 1;
+  const horizontal = ancetres(id).length % 2 === 0;
   if (ouvert) bloc.classList.add("ouvert");
   if (horizontal) bloc.classList.add("h");
   if (s.supprime) bloc.classList.add("supprime");
