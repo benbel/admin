@@ -11,9 +11,10 @@ ANNUAIRE = "https://lannuaire.service-public.gouv.fr"
 DEPART = ANNUAIRE + "/navigation/ministeres"
 LIEN = re.compile(r'href="' + re.escape(ANNUAIRE) + r'/gouvernement/([0-9a-f-]{36})"')
 LISTE = re.compile(r'data-test="organisations-list".*?</ul>', re.S)
-TITRE = re.compile(r'<h1 id="titlePage">(.*?)</h1>', re.S)
+REGROUPEMENT = re.compile(r'href="' + re.escape(ANNUAIRE) + r'/gouvernement/([0-9a-f-]{36})"[^>]*data-test="href-lien-ministeres"')
+TITRE = re.compile(r'<h1[^>]*id="(?:titlePage|contentTitle)"[^>]*>(.*?)</h1>', re.S)
 SORTIE = Path(__file__).parent.parent / "site" / "services.json"
-PROFONDEUR = 6
+PROFONDEUR = 8
 PARALLELE = 6
 
 
@@ -34,7 +35,8 @@ def texte(fragment):
 
 def enfants(page):
     bloc = LISTE.search(page)
-    return list(dict.fromkeys(LIEN.findall(bloc.group(0)))) if bloc else []
+    liste = LIEN.findall(bloc.group(0)) if bloc else []
+    return list(dict.fromkeys(liste + REGROUPEMENT.findall(page)))
 
 
 def fiche(identifiant):
