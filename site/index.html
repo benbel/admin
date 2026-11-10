@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Organisation de l'administration centrale</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+<h1>Organisation de l'administration centrale</h1>
+<p>D'après <a class="externe" href="https://lannuaire.service-public.gouv.fr/navigation/ministeres">l'annuaire de l'administration</a></p>
+<p><input id="recherche" list="noms" placeholder="rechercher un service"><datalist id="noms"></datalist></p>
+</header>
+<main>
+<div id="cadre"><ul id="arbre"></ul></div>
+<aside>
+<section id="selection"></section>
+<section id="journal"></section>
+</aside>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

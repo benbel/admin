@@ -1,0 +1,136 @@
+body {
+  margin: 3rem 5rem;
+  line-height: 1.75;
+  font-size: 16px;
+  background-color: #fcfcfc;
+  color: #111111;
+  font-family: monospace;
+}
+
+a {
+  color: #286c44;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+a.externe::after {
+  content: "⟡";
+  color: #286c44;
+  font-size: 10px;
+  vertical-align: super;
+}
+
+button {
+  font: inherit;
+  color: #286c44;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #111111;
+  width: 26em;
+  max-width: 100%;
+}
+
+h1 {
+  font-size: 1.3em;
+}
+
+h2 {
+  font-size: 1em;
+}
+
+main {
+  display: flex;
+  gap: 4em;
+  align-items: flex-start;
+}
+
+#arbre {
+  max-width: 45em;
+  padding-left: 1em;
+}
+
+aside {
+  position: sticky;
+  top: 1rem;
+  width: 28em;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+ul {
+  list-style: none;
+  padding-left: 1em;
+}
+
+li {
+  margin-bottom: 0.3em;
+}
+
+li::before {
+  content: "› ";
+  margin-left: -1em;
+}
+
+li > ul {
+  margin-top: 0.3em;
+}
+
+.nom {
+  cursor: pointer;
+}
+
+.bascule {
+  margin-left: 0.5em;
+}
+
+.modifie > .nom {
+  color: #286c44;
+  font-weight: bold;
+}
+
+.contient > .nom::after {
+  content: " ●";
+  color: #286c44;
+}
+
+.choisi > .nom {
+  text-decoration: underline;
+}
+
+.supprime > .nom {
+  text-decoration: line-through;
+}
+
+.cible > .nom:hover,
+.survol > .nom {
+  color: #286c44;
+}
+
+.actions button {
+  margin-right: 1.2em;
+}
+
+@media (max-width: 70em) {
+  body {
+    margin: 2rem;
+  }
+
+  main {
+    flex-direction: column;
+  }
+
+  aside {
+    position: static;
+    width: 100%;
+    max-height: none;
+  }
+}
