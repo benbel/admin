@@ -13,6 +13,7 @@ LIEN = re.compile(r'href="' + re.escape(ANNUAIRE) + r'/gouvernement/([0-9a-f-]{3
 LISTE = re.compile(r'data-test="organisations-list".*?</ul>', re.S)
 REGROUPEMENT = re.compile(r'href="' + re.escape(ANNUAIRE) + r'/gouvernement/([0-9a-f-]{36})"[^>]*data-test="href-lien-ministeres"')
 TITRE = re.compile(r'<h1[^>]*id="(?:titlePage|contentTitle)"[^>]*>(.*?)</h1>', re.S)
+TRANSPARENTS = ("Services sous autorité conjointe", "Services centraux")
 SORTIE = Path(__file__).parent.parent / "site" / "services.json"
 PARALLELE = 6
 
@@ -41,7 +42,17 @@ def enfants(page):
 def fiche(identifiant):
     page = telecharge(ANNUAIRE + "/gouvernement/" + identifiant)
     titre = TITRE.search(page)
-    return identifiant, texte(titre.group(1)) if titre else "", enfants(page)
+    return identifiant, texte(titre.group(1)) if titre else "", enfants(page), 'id="contentTitle"' in page
+
+
+def deplie(liste, enfants, transparents):
+    resultat = []
+    for identifiant in liste:
+        if identifiant in transparents:
+            resultat.extend(deplie(enfants[identifiant], enfants, transparents))
+        else:
+            resultat.append(identifiant)
+    return list(dict.fromkeys(resultat))
 
 
 def sans_cycles(racines, enfants):
@@ -70,15 +81,18 @@ def collecte():
     ministeres = list(dict.fromkeys(LIEN.findall(telecharge(DEPART))))
     noms = {}
     listes = {}
+    regroupements = set()
     vus = set(ministeres)
     niveau = ministeres
     profondeur = 0
     with ThreadPoolExecutor(PARALLELE) as executeur:
         while niveau:
             suivant = []
-            for identifiant, nom, liste in executeur.map(fiche, niveau):
+            for identifiant, nom, liste, regroupement in executeur.map(fiche, niveau):
                 noms[identifiant] = nom
                 listes[identifiant] = liste
+                if regroupement:
+                    regroupements.add(identifiant)
                 for enfant in liste:
                     if enfant not in vus:
                         vus.add(enfant)
@@ -92,11 +106,22 @@ def collecte():
         identifiant: [enfant for enfant in listes[identifiant] if enfant in valides]
         for identifiant in valides
         }
+    transparents = {
+        identifiant for identifiant in regroupements & valides
+        if noms[identifiant].startswith(TRANSPARENTS)
+        }
+    print(len(transparents), "regroupements transparents", file=sys.stderr)
+    racines = deplie(racines, enfants, transparents)
+    enfants = {
+        identifiant: deplie(liste, enfants, transparents)
+        for identifiant, liste in enfants.items()
+        if identifiant not in transparents
+        }
     gardes = sans_cycles(racines, enfants)
     return [
         {"id": identifiant, "nom": noms[identifiant], "enfants": gardes[identifiant]}
         for identifiant in noms
-        if identifiant in valides
+        if identifiant in enfants
         ], racines
 
 
