@@ -183,6 +183,12 @@ function ouvreChemin(id) {
   ancetres(id).forEach(a => ouverts.add(a));
 }
 
+function montre(id) {
+  ouvreChemin(id);
+  choisit(id);
+  document.querySelector(".choisi > .service").scrollIntoView({ block: "nearest", inline: "start" });
+}
+
 function choisit(id) {
   choisi = id;
   mode = null;
@@ -222,38 +228,43 @@ function marque(id, contient) {
 
 function branche(id, contient) {
   const s = service(id);
-  const li = element("li");
+  const bloc = element("div", "branche");
+  const boite = element("div", "service");
   const ouvert = ouverts.has(id) && s.enfants.length > 0;
-  if (s.supprime) li.classList.add("supprime");
-  if (s.notes.length) li.classList.add("modifie");
-  if (contient.get(id)) li.classList.add("contient");
-  if (id === choisi) li.classList.add("choisi");
-  if (mode && cibleValide(id)) li.classList.add("cible");
-  const libelle = element("span", "nom", s.nom);
-  libelle.addEventListener("click", () => clique(id));
-  li.append(libelle);
+  if (ouvert) bloc.classList.add("ouvert");
+  if (s.supprime) bloc.classList.add("supprime");
+  if (s.notes.length) bloc.classList.add("modifie");
+  if (contient.get(id)) bloc.classList.add("contient");
+  if (id === choisi) bloc.classList.add("choisi");
+  if (mode && cibleValide(id)) bloc.classList.add("cible");
+  const etiquette = element("span", "etiquette");
+  etiquette.append(element("span", "nom", s.nom));
+  boite.append(etiquette);
+  boite.addEventListener("click", () => clique(id));
   if (s.enfants.length) {
-    li.append(bouton(ouvert ? "[−]" : "[+]", () => {
+    const b = bouton(ouvert ? "[−]" : "[+]", e => {
+      e.stopPropagation();
       if (ouvert) ouverts.delete(id);
       else ouverts.add(id);
       rend();
-    }));
-    li.lastChild.classList.add("bascule");
+    });
+    b.classList.add("bascule");
+    etiquette.append(b);
   }
   if (!s.supprime) {
-    libelle.draggable = true;
-    libelle.addEventListener("dragstart", e => {
+    boite.draggable = true;
+    boite.addEventListener("dragstart", e => {
       glisse = id;
       e.dataTransfer.effectAllowed = "move";
     });
-    libelle.addEventListener("dragend", () => { glisse = null; });
-    libelle.addEventListener("dragover", e => {
+    boite.addEventListener("dragend", () => { glisse = null; });
+    boite.addEventListener("dragover", e => {
       if (!glisse || glisse === id || service(glisse).parent === id || descendants(glisse).includes(id)) return;
       e.preventDefault();
-      li.classList.add("survol");
+      bloc.classList.add("survol");
     });
-    libelle.addEventListener("dragleave", () => li.classList.remove("survol"));
-    libelle.addEventListener("drop", e => {
+    boite.addEventListener("dragleave", () => bloc.classList.remove("survol"));
+    boite.addEventListener("drop", e => {
       e.preventDefault();
       const deplace = glisse;
       glisse = null;
@@ -261,12 +272,13 @@ function branche(id, contient) {
       enregistre({ op: "deplacer", id: deplace, parent: id });
     });
   }
+  bloc.append(boite);
   if (ouvert) {
-    const ul = element("ul");
-    s.enfants.forEach(e => ul.append(branche(e, contient)));
-    li.append(ul);
+    const rangee = element("div", "enfants");
+    s.enfants.forEach(e => rangee.append(branche(e, contient)));
+    bloc.append(rangee);
   }
-  return li;
+  return bloc;
 }
 
 function champ(etiquette, valeur) {
@@ -399,6 +411,7 @@ function rendJournal() {
       construit();
       history.replaceState(null, "", lien.href);
       ouvreModifications();
+      montre(EXEMPLE[0].id);
     });
     p.append(lien);
     journal.append(p);
@@ -408,10 +421,7 @@ function rendJournal() {
   descriptions.forEach((d, k) => {
     const li = element("li");
     const a = element("a", "", d);
-    a.addEventListener("click", () => {
-      ouvreChemin(cible(operations[k]));
-      choisit(cible(operations[k]));
-    });
+    a.addEventListener("click", () => montre(cible(operations[k])));
     li.append(a);
     ol.append(li);
   });
@@ -451,9 +461,7 @@ function rend() {
 document.getElementById("recherche").addEventListener("change", e => {
   const trouve = [...services.values()].find(s => s.nom === e.target.value && !s.supprime);
   if (!trouve) return;
-  ouvreChemin(trouve.id);
-  choisit(trouve.id);
-  document.querySelector(".choisi").scrollIntoView({ block: "center", inline: "nearest" });
+  montre(trouve.id);
 });
 
 window.addEventListener("keydown", e => {
