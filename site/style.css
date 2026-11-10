@@ -1,7 +1,7 @@
 body {
   margin: 2rem 3rem;
   line-height: 1.75;
-  font-size: 16px;
+  font-size: 14px;
   background-color: #fcfcfc;
   color: #111111;
   font-family: monospace;
@@ -77,7 +77,7 @@ main {
   align-items: flex-start;
   overflow: auto;
   max-height: calc(100vh - 9rem);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
@@ -93,8 +93,8 @@ aside section {
 }
 
 .option {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 22ch 1fr;
   align-items: baseline;
   gap: 0.2em 0.8em;
   margin-bottom: 0.4em;
@@ -103,15 +103,18 @@ aside section {
 .option button {
   text-decoration: underline;
   white-space: nowrap;
+  text-align: left;
+  grid-column: 1;
 }
 
 .option > input {
-  flex: 1;
-  min-width: 8em;
+  grid-column: 2;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .option ul {
-  flex-basis: 100%;
+  grid-column: 1 / -1;
   margin: 0.2em 0;
 }
 

@@ -429,8 +429,8 @@ function rendJournal() {
   });
   bascule.classList.add("bascule");
   titre.append(bascule);
+  if (!journalOuvert) return;
   const ol = element("ul");
-  ol.hidden = !journalOuvert;
   descriptions.forEach((d, k) => {
     const li = element("li");
     const a = element("a", "", d);
