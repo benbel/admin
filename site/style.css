@@ -195,3 +195,19 @@ li::before {
 #ariane a {
   text-decoration: underline;
 }
+
+#choix {
+  margin: 0;
+  padding: 0.4em 0.6em;
+  border: 1px solid #111111;
+  border-radius: 6px;
+}
+
+#choix input {
+  margin-left: 0.5em;
+}
+
+#choix button {
+  margin-left: 1em;
+  text-decoration: underline;
+}

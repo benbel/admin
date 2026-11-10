@@ -29,6 +29,7 @@ const arbre = document.getElementById("arbre");
 const selection = document.getElementById("selection");
 const journal = document.getElementById("journal");
 const ariane = document.getElementById("ariane");
+const choix = document.getElementById("choix");
 
 function element(balise, classe, texte) {
   const e = document.createElement(balise);
@@ -391,10 +392,7 @@ function rendSelection() {
     selection.append(ul);
   }
   if (s.supprime) return;
-  if (mode) {
-    selection.append(element("p", "", (mode.type === "deplacer" ? "Choisir le nouveau service de rattachement" : "Choisir le service à fusionner") + " (Échap pour annuler)"));
-    return;
-  }
+  if (mode) return;
   const actions = element("div", "actions");
   const ouvre = type => () => { formulaire = { type: type }; rend(); };
   if (id === RACINE) {
@@ -485,6 +483,27 @@ function rendAriane() {
   ariane.append(nom(focus));
 }
 
+function cherche(texte) {
+  return [...services.values()].find(s => s.nom === texte && !s.supprime);
+}
+
+function rendChoix() {
+  choix.innerHTML = "";
+  choix.hidden = !mode;
+  if (!mode) return;
+  const label = element("label", "", (mode.type === "deplacer" ? "Rattacher " : "Fusionner ") + nom(mode.id) + (mode.type === "deplacer" ? " à " : " avec "));
+  const input = element("input");
+  input.setAttribute("list", "noms");
+  input.placeholder = "cliquer sur un service ou taper son nom";
+  input.addEventListener("change", () => {
+    const trouve = cherche(input.value);
+    if (trouve && cibleValide(trouve.id)) clique(trouve.id);
+  });
+  label.append(input);
+  choix.append(label, " ", bouton("annuler", () => { mode = null; rend(); }));
+  setTimeout(() => input.focus(), 0);
+}
+
 function rend() {
   if (!services.has(focus)) focus = RACINE;
   const contient = new Map();
@@ -493,17 +512,25 @@ function rend() {
   if (focus === RACINE) service(RACINE).enfants.forEach(e => arbre.append(branche(e, contient)));
   else arbre.append(branche(focus, contient));
   rendAriane();
+  rendChoix();
   rendSelection();
   rendJournal();
   rendNoms();
 }
 
 document.getElementById("recherche").addEventListener("change", e => {
-  const trouve = [...services.values()].find(s => s.nom === e.target.value && !s.supprime);
+  const trouve = cherche(e.target.value);
   if (!trouve) return;
   e.target.value = "";
-  if (mode) clique(trouve.id);
-  else montre(trouve.id);
+  montre(trouve.id);
+});
+
+arbre.addEventListener("dragover", e => {
+  const cadre = arbre.getBoundingClientRect();
+  const marge = 60;
+  const dx = e.clientX < cadre.left + marge ? -20 : (e.clientX > cadre.right - marge ? 20 : 0);
+  const dy = e.clientY < cadre.top + marge ? -20 : (e.clientY > cadre.bottom - marge ? 20 : 0);
+  arbre.scrollBy(dx, dy);
 });
 
 window.addEventListener("keydown", e => {
