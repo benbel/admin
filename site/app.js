@@ -29,7 +29,6 @@ const arbre = document.getElementById("arbre");
 const selection = document.getElementById("selection");
 const journal = document.getElementById("journal");
 const ariane = document.getElementById("ariane");
-const choix = document.getElementById("choix");
 
 function element(balise, classe, texte) {
   const e = document.createElement(balise);
@@ -309,15 +308,16 @@ function champ(etiquette, valeur) {
   return [label, input];
 }
 
-function formulaireNom(etiquette, valeur, validation, extra) {
+function formulaireNom(etiquette, valeur, validation, extra, liste) {
   const f = element("form");
   const [label, input] = champ(etiquette, valeur);
+  if (liste) input.setAttribute("list", liste);
   f.append(label);
   if (extra) f.append(extra);
   const actions = element("div", "actions");
   const valider = element("button", "", "valider");
   valider.type = "submit";
-  actions.append(valider, bouton("annuler", () => { formulaire = null; rend(); }));
+  actions.append(valider, bouton("annuler", () => { formulaire = null; mode = null; rend(); }));
   f.append(actions);
   f.addEventListener("submit", e => {
     e.preventDefault();
@@ -340,6 +340,14 @@ function cases(id) {
     ul.append(li);
   });
   return ul;
+}
+
+function formulaireCible() {
+  const etiquette = mode.type === "deplacer" ? "Nouveau service de rattachement" : "Service avec lequel fusionner";
+  return formulaireNom(etiquette, "", (v, f) => {
+    const trouve = cherche(v);
+    if (trouve && cibleValide(trouve.id)) clique(trouve.id);
+  }, null, "noms");
 }
 
 function rendFormulaire(id) {
@@ -380,7 +388,7 @@ function rendSelection() {
   const s = service(id);
   const titre = element("h2", "", s.nom + " ");
   if (!s.nouveau && id !== RACINE) {
-    const lien = element("a", "externe", "annuaire");
+    const lien = element("a", "externe", "fiche");
     lien.href = ANNUAIRE + id;
     lien.target = "_blank";
     titre.append(lien);
@@ -407,6 +415,7 @@ function rendSelection() {
   }
   selection.append(actions);
   if (formulaire) selection.append(rendFormulaire(id));
+  if (mode) selection.append(formulaireCible());
 }
 
 function cible(op) {
@@ -452,7 +461,6 @@ function rendJournal() {
   const actions = element("div", "actions");
   actions.append(bouton("annuler la dernière", () => annule(1)));
   actions.append(bouton("tout annuler", () => annule(operations.length)));
-  actions.append(bouton("déplier les modifications", ouvreModifications));
   journal.append(actions);
 }
 
@@ -486,23 +494,6 @@ function cherche(texte) {
   return [...services.values()].find(s => s.nom === texte && !s.supprime);
 }
 
-function rendChoix() {
-  choix.innerHTML = "";
-  choix.hidden = !mode;
-  if (!mode) return;
-  const label = element("label", "", (mode.type === "deplacer" ? "Rattacher " : "Fusionner ") + nom(mode.id) + (mode.type === "deplacer" ? " à " : " avec "));
-  const input = element("input");
-  input.setAttribute("list", "noms");
-  input.placeholder = "cliquer sur un service ou taper son nom";
-  input.addEventListener("change", () => {
-    const trouve = cherche(input.value);
-    if (trouve && cibleValide(trouve.id)) clique(trouve.id);
-  });
-  label.append(input);
-  choix.append(label, " ", bouton("annuler", () => { mode = null; rend(); }));
-  setTimeout(() => input.focus(), 0);
-}
-
 function rend() {
   if (!services.has(focus)) focus = RACINE;
   const contient = new Map();
@@ -511,7 +502,6 @@ function rend() {
   if (focus === RACINE) service(RACINE).enfants.forEach(e => arbre.append(branche(e, contient)));
   else arbre.append(branche(focus, contient));
   rendAriane();
-  rendChoix();
   rendSelection();
   rendJournal();
   rendNoms();

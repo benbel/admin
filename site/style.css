@@ -209,19 +209,6 @@ li::before {
   text-decoration: underline;
 }
 
-#choix {
-  margin: 0;
-}
-
-#choix input {
-  margin-left: 0.5em;
-}
-
-#choix button {
-  margin-left: 1em;
-  text-decoration: underline;
-}
-
 input:focus {
   outline: none;
 }
