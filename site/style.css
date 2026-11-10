@@ -22,7 +22,7 @@ a.externe::after {
 
 button {
   font: inherit;
-  color: #286c44;
+  color: inherit;
   background: none;
   border: 0;
   padding: 0;
@@ -49,27 +49,32 @@ h2 {
 
 main {
   display: flex;
-  gap: 2em;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 1em;
 }
 
 #arbre {
-  flex: 1;
-  min-width: 0;
   display: flex;
   gap: 1.5em;
   align-items: flex-start;
   overflow: auto;
-  height: calc(100vh - 12rem);
+  max-height: 65vh;
   font-size: 13px;
   line-height: 1.4;
 }
 
 aside {
-  width: 24em;
-  flex-shrink: 0;
-  height: calc(100vh - 12rem);
-  overflow-y: auto;
+  display: flex;
+  gap: 4em;
+}
+
+aside section {
+  flex: 1;
+  max-width: 45em;
+}
+
+#journal li a {
+  color: inherit;
 }
 
 ul {
@@ -150,6 +155,7 @@ li::before {
 
 .actions button {
   margin-right: 1.2em;
+  text-decoration: underline;
 }
 
 @media (max-width: 70em) {
@@ -157,17 +163,8 @@ li::before {
     margin: 2rem;
   }
 
-  main {
-    flex-direction: column;
-  }
-
   aside {
-    width: 100%;
-    height: auto;
-  }
-
-  #arbre {
-    width: 100%;
-    height: 70vh;
+    flex-direction: column;
+    gap: 0;
   }
 }
