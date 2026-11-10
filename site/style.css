@@ -62,8 +62,13 @@ h2 {
 
 main {
   display: flex;
-  flex-direction: column;
-  gap: 1em;
+  gap: 3em;
+  align-items: flex-start;
+}
+
+#vue {
+  flex: 1;
+  min-width: 0;
 }
 
 #arbre {
@@ -71,19 +76,47 @@ main {
   gap: 1.5em;
   align-items: flex-start;
   overflow: auto;
-  max-height: 65vh;
+  max-height: calc(100vh - 9rem);
   font-size: 13px;
   line-height: 1.4;
 }
 
 aside {
-  display: flex;
-  gap: 4em;
+  width: 28em;
+  flex-shrink: 0;
+  max-height: calc(100vh - 9rem);
+  overflow-y: auto;
 }
 
 aside section {
+  margin-bottom: 2em;
+}
+
+.option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2em 0.8em;
+  margin-bottom: 0.4em;
+}
+
+.option button {
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.option > input {
   flex: 1;
-  max-width: 45em;
+  min-width: 8em;
+}
+
+.option ul {
+  flex-basis: 100%;
+  margin: 0.2em 0;
+}
+
+.choix .service:hover {
+  border-color: #286c44;
 }
 
 #ariane a,
@@ -161,7 +194,7 @@ li::before {
 }
 
 #ariane {
-  margin: 0;
+  margin: 0 0 0.5em;
 }
 
 .modifie > .service .nom {
@@ -183,7 +216,6 @@ li::before {
   text-decoration: line-through;
 }
 
-.cible > .service:hover,
 .survol > .service,
 .survol.ouvert {
   border-color: #286c44;
@@ -199,9 +231,13 @@ li::before {
     margin: 2rem;
   }
 
-  aside {
-    flex-direction: column;
-    gap: 0;
+  main {
+    flex-direction: column-reverse;
+  }
+
+  aside,
+  #vue {
+    width: 100%;
   }
 }
 
@@ -211,4 +247,17 @@ li::before {
 
 input:focus {
   outline: none;
+}
+
+input[type="checkbox"] {
+  width: auto;
+  margin: 0 0.5em 0 0;
+}
+
+.option ul {
+  padding-left: 0;
+}
+
+.option li::before {
+  content: none;
 }

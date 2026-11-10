@@ -21,8 +21,7 @@ let ouverts = new Set([RACINE]);
 let focus = RACINE;
 let journalOuvert = false;
 let choisi = null;
-let mode = null;
-let formulaire = null;
+let saisie = null;
 let glisse = null;
 
 const arbre = document.getElementById("arbre");
@@ -165,8 +164,7 @@ function identifiant() {
 
 function enregistre(op) {
   operations.push(op);
-  formulaire = null;
-  mode = null;
+  saisie = null;
   construit();
   history.replaceState(null, "", "#" + encodeURIComponent(JSON.stringify(operations)));
   rend();
@@ -177,8 +175,7 @@ function annule(nombre) {
   construit();
   if (choisi && !services.has(choisi)) choisi = null;
   history.replaceState(null, "", operations.length ? "#" + encodeURIComponent(JSON.stringify(operations)) : location.pathname);
-  formulaire = null;
-  mode = null;
+  saisie = null;
   rend();
 }
 
@@ -206,32 +203,27 @@ function montre(id) {
 
 function choisit(id) {
   choisi = id;
-  mode = null;
-  formulaire = null;
+  saisie = null;
   rend();
 }
 
-function cibleValide(id) {
-  if (!mode || service(id).supprime || id === mode.id) return false;
-  if (mode.type === "deplacer") return id !== service(mode.id).parent && !descendants(mode.id).includes(id);
-  return !descendants(mode.id).includes(id) && !descendants(id).includes(mode.id);
+function rattachable(id, parent) {
+  return !service(parent).supprime && id !== parent && parent !== service(id).parent && !descendants(id).includes(parent);
+}
+
+function fusionnable(a, b) {
+  return !service(b).supprime && a !== b && !descendants(a).includes(b) && !descendants(b).includes(a);
 }
 
 function clique(id) {
-  if (!mode) {
+  if (!saisie) {
     choisit(id === choisi ? null : id);
     return;
   }
-  if (!cibleValide(id)) return;
-  if (mode.type === "deplacer") {
-    ouvreChemin(mode.id);
-    ouverts.add(id);
-    enregistre({ op: "deplacer", id: mode.id, parent: id });
-    return;
-  }
-  formulaire = { type: "fusionner", cible: id };
-  mode = null;
-  rend();
+  saisie.value = service(id).nom;
+  saisie.focus();
+  saisie = null;
+  arbre.classList.remove("choix");
 }
 
 function marque(id, contient) {
@@ -253,7 +245,6 @@ function branche(id, contient) {
   if (s.notes.length) bloc.classList.add("modifie");
   if (contient.get(id)) bloc.classList.add("contient");
   if (id === choisi) bloc.classList.add("choisi");
-  if (mode && cibleValide(id)) bloc.classList.add("cible");
   const etiquette = element("span", "etiquette");
   etiquette.append(element("span", "nom", s.nom));
   boite.append(etiquette);
@@ -276,7 +267,7 @@ function branche(id, contient) {
     });
     boite.addEventListener("dragend", () => { glisse = null; });
     boite.addEventListener("dragover", e => {
-      if (!glisse || glisse === id || service(glisse).parent === id || descendants(glisse).includes(id)) return;
+      if (!glisse || !rattachable(glisse, id)) return;
       e.preventDefault();
       bloc.classList.add("survol");
     });
@@ -298,33 +289,41 @@ function branche(id, contient) {
   return bloc;
 }
 
-function champ(etiquette, valeur) {
-  const label = element("label", "", etiquette);
-  const input = element("input");
-  input.type = "text";
-  input.value = valeur;
-  input.required = true;
-  label.append(input);
-  return [label, input];
-}
-
-function formulaireNom(etiquette, valeur, validation, extra, liste) {
-  const f = element("form");
-  const [label, input] = champ(etiquette, valeur);
-  if (liste) input.setAttribute("list", liste);
-  f.append(label);
+function option(libelle, champs, action, extra) {
+  const f = element("form", "option");
+  const b = element("button", "", libelle);
+  b.type = "submit";
+  f.append(b);
+  const entrees = champs.map(c => {
+    const input = element("input");
+    input.type = "text";
+    input.placeholder = c.indication;
+    input.required = true;
+    if (c.cible) {
+      input.setAttribute("list", "noms");
+      input.addEventListener("focus", () => {
+        saisie = input;
+        arbre.classList.add("choix");
+      });
+    }
+    input.addEventListener("input", () => input.setCustomValidity(""));
+    f.append(input);
+    return input;
+  });
   if (extra) f.append(extra);
-  const actions = element("div", "actions");
-  const valider = element("button", "", "valider");
-  valider.type = "submit";
-  actions.append(valider, bouton("annuler", () => { formulaire = null; mode = null; rend(); }));
-  f.append(actions);
   f.addEventListener("submit", e => {
     e.preventDefault();
-    if (input.value.trim()) validation(input.value.trim(), f);
+    action(entrees.map(i => i.value.trim()), entrees, f);
   });
-  setTimeout(() => input.focus(), 0);
   return f;
+}
+
+function resout(input, test) {
+  const trouve = cherche(input.value.trim());
+  if (trouve && test(trouve.id)) return trouve.id;
+  input.setCustomValidity("Service introuvable ou impossible");
+  input.reportValidity();
+  return null;
 }
 
 function cases(id) {
@@ -340,46 +339,6 @@ function cases(id) {
     ul.append(li);
   });
   return ul;
-}
-
-function formulaireCible() {
-  const etiquette = mode.type === "deplacer" ? "Nouveau service de rattachement" : "Service avec lequel fusionner";
-  return formulaireNom(etiquette, "", (v, f) => {
-    const trouve = cherche(v);
-    if (trouve && cibleValide(trouve.id)) clique(trouve.id);
-  }, null, "noms");
-}
-
-function rendFormulaire(id) {
-  const s = service(id);
-  if (formulaire.type === "renommer") {
-    return formulaireNom("Nouveau nom", s.nom, v => enregistre({ op: "renommer", id: id, nom: v }));
-  }
-  if (formulaire.type === "creer") {
-    return formulaireNom(id === RACINE ? "Nom du ministère" : "Nom du sous-service", "", v => {
-      ouverts.add(id);
-      enregistre({ op: "creer", id: identifiant(), nom: v, parent: id });
-    });
-  }
-  if (formulaire.type === "scinder") {
-    return formulaireNom("Nom du service créé par scission de " + s.nom, "", (v, f) => {
-      const enfants = [...f.querySelectorAll("input[type=checkbox]:checked")].map(c => c.value);
-      const nouveau = identifiant();
-      ouverts.add(service(id).parent);
-      if (enfants.length) ouverts.add(nouveau);
-      enregistre({ op: "scinder", id: id, nouveau: nouveau, nom: v, enfants: enfants });
-    }, cases(id));
-  }
-  if (formulaire.type === "fusionner") {
-    const f = formulaireNom("Nom du service issu de la fusion avec " + nom(formulaire.cible), s.nom, v => {
-      const nouveau = identifiant();
-      ouvreChemin(id);
-      ouverts.add(nouveau);
-      enregistre({ op: "fusionner", id: nouveau, a: id, b: formulaire.cible, nom: v });
-    });
-    return f;
-  }
-  return element("div");
 }
 
 function rendSelection() {
@@ -400,22 +359,44 @@ function rendSelection() {
     selection.append(ul);
   }
   if (s.supprime) return;
-  const actions = element("div", "actions");
-  const ouvre = type => () => { formulaire = { type: type }; mode = null; rend(); };
   if (id === RACINE) {
-    actions.append(bouton("créer un ministère", ouvre("creer")));
-  } else {
-    if (s.enfants.length && id !== focus) actions.append(bouton("recentrer", () => recentre(id)));
-    actions.append(bouton("renommer", ouvre("renommer")));
-    actions.append(bouton("créer un sous-service", ouvre("creer")));
-    actions.append(bouton("scinder", ouvre("scinder")));
-    actions.append(bouton("fusionner avec…", () => { mode = { type: "fusionner", id: id }; formulaire = null; rend(); }));
-    actions.append(bouton("rattacher à…", () => { mode = { type: "deplacer", id: id }; formulaire = null; rend(); }));
-    actions.append(bouton("supprimer", () => enregistre({ op: "supprimer", id: id })));
+    selection.append(option("créer un ministère", [{ indication: "nom" }], ([v]) => enregistre({ op: "creer", id: identifiant(), nom: v, parent: RACINE })));
+    return;
   }
-  selection.append(actions);
-  if (formulaire) selection.append(rendFormulaire(id));
-  if (mode) selection.append(formulaireCible());
+  if (s.enfants.length && id !== focus) selection.append(option("recentrer", [], () => recentre(id)));
+  selection.append(option("renommer", [{ indication: "nouveau nom" }], ([v]) => enregistre({ op: "renommer", id: id, nom: v })));
+  selection.append(option("créer un sous-service", [{ indication: "nom" }], ([v]) => {
+    ouverts.add(id);
+    enregistre({ op: "creer", id: identifiant(), nom: v, parent: id });
+  }));
+  const liste = actifs(id).length ? cases(id) : null;
+  const scission = option("scinder", [{ indication: "nom du nouveau service" }], ([v], entrees, f) => {
+    const enfants = [...f.querySelectorAll("input[type=checkbox]:checked")].map(c => c.value);
+    const nouveau = identifiant();
+    if (enfants.length) ouverts.add(nouveau);
+    enregistre({ op: "scinder", id: id, nouveau: nouveau, nom: v, enfants: enfants });
+  }, liste);
+  if (liste) {
+    liste.hidden = true;
+    scission.querySelector("input").addEventListener("input", e => { liste.hidden = !e.target.value; });
+  }
+  selection.append(scission);
+  selection.append(option("fusionner avec", [{ indication: "service", cible: true }, { indication: "nouveau nom" }], ([, v], entrees) => {
+    const autre = resout(entrees[0], b => fusionnable(id, b));
+    if (!autre) return;
+    const nouveau = identifiant();
+    ouvreChemin(id);
+    ouverts.add(nouveau);
+    enregistre({ op: "fusionner", id: nouveau, a: id, b: autre, nom: v });
+  }));
+  selection.append(option("rattacher à", [{ indication: "service", cible: true }], (valeurs, entrees) => {
+    const parent = resout(entrees[0], c => rattachable(id, c));
+    if (!parent) return;
+    ouvreChemin(id);
+    ouverts.add(parent);
+    enregistre({ op: "deplacer", id: id, parent: parent });
+  }));
+  selection.append(option("supprimer", [], () => enregistre({ op: "supprimer", id: id })));
 }
 
 function cible(op) {
@@ -499,6 +480,7 @@ function rend() {
   const contient = new Map();
   marque(RACINE, contient);
   arbre.innerHTML = "";
+  arbre.classList.remove("choix");
   if (focus === RACINE) service(RACINE).enfants.forEach(e => arbre.append(branche(e, contient)));
   else arbre.append(branche(focus, contient));
   rendAriane();
@@ -514,6 +496,12 @@ document.getElementById("recherche").addEventListener("change", e => {
   montre(trouve.id);
 });
 
+selection.addEventListener("focusin", e => {
+  if (e.target === saisie) return;
+  saisie = null;
+  arbre.classList.remove("choix");
+});
+
 arbre.addEventListener("dragover", e => {
   const cadre = arbre.getBoundingClientRect();
   const marge = 60;
@@ -524,12 +512,12 @@ arbre.addEventListener("dragover", e => {
 
 window.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
-  if (mode || formulaire) {
-    mode = null;
-    formulaire = null;
-  } else {
-    choisi = null;
+  if (saisie) {
+    saisie = null;
+    arbre.classList.remove("choix");
+    return;
   }
+  choisi = null;
   rend();
 });
 
