@@ -73,6 +73,7 @@ aside section {
   max-width: 45em;
 }
 
+#ariane a,
 #journal li a {
   color: inherit;
 }
@@ -104,6 +105,11 @@ li::before {
   align-items: flex-start;
 }
 
+.vertical {
+  flex-direction: column;
+  padding-left: 1.5em;
+}
+
 .service {
   max-width: 14em;
   padding: 0.4em 0.6em;
@@ -113,7 +119,7 @@ li::before {
   cursor: pointer;
 }
 
-.ouvert > .service {
+.ouvert.h > .service {
   max-width: none;
   width: 0;
   min-width: 100%;
@@ -128,6 +134,10 @@ li::before {
 
 .bascule {
   margin-left: 0.5em;
+}
+
+#ariane {
+  margin: 0;
 }
 
 .modifie > .service .nom {
@@ -167,4 +177,8 @@ li::before {
     flex-direction: column;
     gap: 0;
   }
+}
+
+#ariane a {
+  text-decoration: underline;
 }

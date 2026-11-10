@@ -18,6 +18,8 @@ let services = new Map();
 let operations = [];
 let descriptions = [];
 let ouverts = new Set([RACINE]);
+let focus = RACINE;
+let journalOuvert = false;
 let choisi = null;
 let mode = null;
 let formulaire = null;
@@ -26,6 +28,7 @@ let glisse = null;
 const arbre = document.getElementById("arbre");
 const selection = document.getElementById("selection");
 const journal = document.getElementById("journal");
+const ariane = document.getElementById("ariane");
 
 function element(balise, classe, texte) {
   const e = document.createElement(balise);
@@ -183,7 +186,19 @@ function ouvreChemin(id) {
   ancetres(id).forEach(a => ouverts.add(a));
 }
 
+function dans(id, racine) {
+  return racine === RACINE || id === racine || ancetres(id).includes(racine);
+}
+
+function recentre(id) {
+  focus = id;
+  ouverts.add(id);
+  rend();
+  arbre.scrollTo(0, 0);
+}
+
 function montre(id) {
+  if (!dans(id, focus)) focus = RACINE;
   ouvreChemin(id);
   choisit(id);
   document.querySelector(".choisi > .service").scrollIntoView({ block: "nearest", inline: "start" });
@@ -231,7 +246,9 @@ function branche(id, contient) {
   const bloc = element("div", "branche");
   const boite = element("div", "service");
   const ouvert = ouverts.has(id) && s.enfants.length > 0;
+  const horizontal = ancetres(id).length % 2 === 1;
   if (ouvert) bloc.classList.add("ouvert");
+  if (horizontal) bloc.classList.add("h");
   if (s.supprime) bloc.classList.add("supprime");
   if (s.notes.length) bloc.classList.add("modifie");
   if (contient.get(id)) bloc.classList.add("contient");
@@ -274,7 +291,7 @@ function branche(id, contient) {
   }
   bloc.append(boite);
   if (ouvert) {
-    const rangee = element("div", "enfants");
+    const rangee = element("div", horizontal ? "enfants horizontal" : "enfants vertical");
     s.enfants.forEach(e => rangee.append(branche(e, contient)));
     bloc.append(rangee);
   }
@@ -383,6 +400,7 @@ function rendSelection() {
   if (id === RACINE) {
     actions.append(bouton("créer un ministère", ouvre("creer")));
   } else {
+    if (s.enfants.length && id !== focus) actions.append(bouton("recentrer", () => recentre(id)));
     actions.append(bouton("renommer", ouvre("renommer")));
     actions.append(bouton("créer un sous-service", ouvre("creer")));
     if (actifs(id).length > 1) actions.append(bouton("scinder", ouvre("scinder")));
@@ -400,7 +418,8 @@ function cible(op) {
 
 function rendJournal() {
   journal.innerHTML = "";
-  journal.append(element("h2", "", "Modifications (" + operations.length + ")"));
+  const titre = element("h2", "", "Modifications (" + operations.length + ")");
+  journal.append(titre);
   if (!operations.length) {
     const p = element("p", "", "Exemple : ");
     const lien = element("a", "", "pôle ministériel de l'écologie");
@@ -417,7 +436,14 @@ function rendJournal() {
     journal.append(p);
     return;
   }
+  const bascule = bouton(journalOuvert ? "[−]" : "[+]", () => {
+    journalOuvert = !journalOuvert;
+    rend();
+  });
+  bascule.classList.add("bascule");
+  titre.append(bascule);
   const ol = element("ul");
+  ol.hidden = !journalOuvert;
   descriptions.forEach((d, k) => {
     const li = element("li");
     const a = element("a", "", d);
@@ -448,11 +474,25 @@ function rendNoms() {
     .forEach(n => liste.append(new Option(n)));
 }
 
+function rendAriane() {
+  ariane.innerHTML = "";
+  if (focus === RACINE) return;
+  ancetres(focus).reverse().forEach(a => {
+    const lien = element("a", "", nom(a));
+    lien.addEventListener("click", () => recentre(a));
+    ariane.append(lien, " › ");
+  });
+  ariane.append(nom(focus));
+}
+
 function rend() {
+  if (!services.has(focus)) focus = RACINE;
   const contient = new Map();
   marque(RACINE, contient);
   arbre.innerHTML = "";
-  service(RACINE).enfants.forEach(e => arbre.append(branche(e, contient)));
+  if (focus === RACINE) service(RACINE).enfants.forEach(e => arbre.append(branche(e, contient)));
+  else arbre.append(branche(focus, contient));
+  rendAriane();
   rendSelection();
   rendJournal();
   rendNoms();
@@ -461,7 +501,9 @@ function rend() {
 document.getElementById("recherche").addEventListener("change", e => {
   const trouve = [...services.values()].find(s => s.nom === e.target.value && !s.supprime);
   if (!trouve) return;
-  montre(trouve.id);
+  e.target.value = "";
+  if (mode) clique(trouve.id);
+  else montre(trouve.id);
 });
 
 window.addEventListener("keydown", e => {
@@ -489,7 +531,6 @@ fetch("services.json")
   .then(donnees => {
     base = donnees;
     operations = lit();
-    base.racines.forEach(r => ouverts.add(r));
     construit();
     rend();
   });
