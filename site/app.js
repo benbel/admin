@@ -1,0 +1,540 @@
+const ANNUAIRE = "https://lannuaire.service-public.gouv.fr/gouvernement/";
+const RACINE = "gouvernement";
+const EXEMPLE = [
+  { op: "creer", id: "n0", nom: "Direction générale de l'environnement", parent: "05f90b6a-e3d9-4a41-a919-2e2f2d77e517" },
+  { op: "deplacer", id: "788fbe81-0c4b-4cea-b43a-9074d6aebe01", parent: "n0" },
+  { op: "deplacer", id: "7a9c104f-d084-4acd-8dc1-15623daab613", parent: "n0" },
+  { op: "deplacer", id: "72569d98-5b45-477c-ba48-ba88e88be503", parent: "n0" },
+  { op: "deplacer", id: "6b0d4e7c-bd64-483b-a34e-4ea12be4fddc", parent: "n0" },
+  { op: "deplacer", id: "ef797219-781f-4b8c-9b13-25ddb219f116", parent: "n0" },
+  { op: "deplacer", id: "90b4a970-ca3b-4658-a6af-edc7ffee1fe8", parent: "n0" },
+  { op: "supprimer", id: "9d2b584b-a219-4c78-bbd3-a85386cdc275" },
+  { op: "deplacer", id: "3c94847b-5f70-4fbf-a6a8-9a6196791267", parent: "e7b05d23-4d86-400a-b8cf-38d8f40dbfff" },
+  { op: "deplacer", id: "8884e740-cc68-4d1f-a825-be7289da3c54", parent: "e7b05d23-4d86-400a-b8cf-38d8f40dbfff" },
+  ];
+
+let base = null;
+let services = new Map();
+let operations = [];
+let descriptions = [];
+let ouverts = new Set([RACINE]);
+let focus = RACINE;
+let journalOuvert = false;
+let choisi = null;
+let saisie = null;
+let glisse = null;
+
+const arbre = document.getElementById("arbre");
+const selection = document.getElementById("selection");
+const journal = document.getElementById("journal");
+const ariane = document.getElementById("ariane");
+
+function element(balise, classe, texte) {
+  const e = document.createElement(balise);
+  if (classe) e.className = classe;
+  if (texte !== undefined) e.textContent = texte;
+  return e;
+}
+
+function bouton(texte, action) {
+  const b = element("button", "", texte);
+  b.type = "button";
+  b.addEventListener("click", action);
+  return b;
+}
+
+function service(id) {
+  return services.get(id);
+}
+
+function nom(id) {
+  return id === RACINE ? "Gouvernement" : service(id).nom;
+}
+
+function ajoute(id, libelle, parent, apres) {
+  services.set(id, { id: id, nom: libelle, parent: parent, enfants: [], supprime: false, notes: [], nouveau: true });
+  const freres = service(parent).enfants;
+  const rang = apres ? freres.indexOf(apres) + 1 : freres.length;
+  freres.splice(rang, 0, id);
+}
+
+function detache(id) {
+  const freres = service(service(id).parent).enfants;
+  freres.splice(freres.indexOf(id), 1);
+}
+
+function rattache(id, parent) {
+  detache(id);
+  service(id).parent = parent;
+  service(parent).enfants.push(id);
+}
+
+function note(id, texte) {
+  service(id).notes.push(texte);
+}
+
+function supprime(id) {
+  service(id).supprime = true;
+  service(id).enfants.forEach(supprime);
+}
+
+function actifs(id) {
+  return service(id).enfants.filter(e => !service(e).supprime);
+}
+
+function descendants(id) {
+  return service(id).enfants.flatMap(e => [e].concat(descendants(e)));
+}
+
+function ancetres(id) {
+  const liste = [];
+  let courant = service(id).parent;
+  while (courant) {
+    liste.push(courant);
+    courant = service(courant).parent;
+  }
+  return liste;
+}
+
+function applique(op) {
+  const s = service(op.id);
+  if (op.op === "creer") {
+    ajoute(op.id, op.nom, op.parent);
+    note(op.id, "créé");
+    return "Création de " + op.nom;
+  }
+  if (op.op === "renommer") {
+    const ancien = s.nom;
+    s.nom = op.nom;
+    note(op.id, "anciennement " + ancien);
+    return ancien + " devient " + op.nom;
+  }
+  if (op.op === "deplacer") {
+    const ancien = s.parent;
+    rattache(op.id, op.parent);
+    note(op.id, "rattaché à " + nom(op.parent) + ", auparavant " + nom(ancien));
+    if (ancien !== RACINE) note(ancien, s.nom + " transféré à " + nom(op.parent));
+    return s.nom + " → " + nom(op.parent);
+  }
+  if (op.op === "fusionner") {
+    const a = service(op.a), b = service(op.b);
+    ajoute(op.id, op.nom, a.parent, op.a);
+    [a, b].forEach(x => {
+      actifs(x.id).forEach(e => rattache(e, op.id));
+      supprime(x.id);
+      note(x.id, "fusionné dans " + op.nom);
+    });
+    note(op.id, "fusion de " + a.nom + " et " + b.nom);
+    return "Fusion de " + a.nom + " et " + b.nom + " : " + op.nom;
+  }
+  if (op.op === "scinder") {
+    ajoute(op.nouveau, op.nom, s.parent, op.id);
+    op.enfants.forEach(e => rattache(e, op.nouveau));
+    note(op.nouveau, "issu de " + s.nom);
+    note(op.id, "scindé, " + op.nom + " créé");
+    return "Scission de " + s.nom + " : " + op.nom;
+  }
+  if (op.op === "supprimer") {
+    supprime(op.id);
+    note(op.id, "supprimé");
+    return "Suppression de " + s.nom;
+  }
+  return "";
+}
+
+function construit() {
+  services = new Map();
+  services.set(RACINE, { id: RACINE, nom: "Gouvernement", parent: null, enfants: base.racines.slice(), supprime: false, notes: [], nouveau: false });
+  base.services.forEach(b => services.set(b.id, { id: b.id, nom: b.nom, parent: null, enfants: b.enfants.slice(), supprime: false, notes: [], nouveau: false }));
+  services.forEach(s => { s.enfants = s.enfants.filter(e => services.has(e)); });
+  services.forEach(s => s.enfants.forEach(e => { service(e).parent = s.id; }));
+  descriptions = [];
+  for (let k = 0; k < operations.length; k += 1) {
+    try {
+      descriptions.push(applique(operations[k]));
+    } catch (erreur) {
+      operations = operations.slice(0, k);
+    }
+  }
+}
+
+function identifiant() {
+  return "n" + operations.length;
+}
+
+function enregistre(op) {
+  operations.push(op);
+  saisie = null;
+  construit();
+  history.replaceState(null, "", "#" + encodeURIComponent(JSON.stringify(operations)));
+  rend();
+}
+
+function annule(nombre) {
+  operations = operations.slice(0, operations.length - nombre);
+  construit();
+  if (choisi && !services.has(choisi)) choisi = null;
+  history.replaceState(null, "", operations.length ? "#" + encodeURIComponent(JSON.stringify(operations)) : location.pathname);
+  saisie = null;
+  rend();
+}
+
+function ouvreChemin(id) {
+  ancetres(id).forEach(a => ouverts.add(a));
+}
+
+function dans(id, racine) {
+  return racine === RACINE || id === racine || ancetres(id).includes(racine);
+}
+
+function recentre(id) {
+  focus = id;
+  ouverts.add(id);
+  rend();
+  arbre.scrollTo(0, 0);
+}
+
+function montre(id) {
+  if (!dans(id, focus)) focus = RACINE;
+  ouvreChemin(id);
+  choisit(id);
+  document.querySelector(".choisi > .service").scrollIntoView({ block: "nearest", inline: "start" });
+}
+
+function choisit(id) {
+  choisi = id;
+  saisie = null;
+  rend();
+}
+
+function rattachable(id, parent) {
+  return !service(parent).supprime && id !== parent && parent !== service(id).parent && !descendants(id).includes(parent);
+}
+
+function fusionnable(a, b) {
+  return !service(b).supprime && a !== b && !descendants(a).includes(b) && !descendants(b).includes(a);
+}
+
+function clique(id) {
+  if (!saisie) {
+    choisit(id === choisi ? null : id);
+    return;
+  }
+  saisie.value = service(id).nom;
+  saisie.focus();
+  saisie = null;
+  arbre.classList.remove("choix");
+}
+
+function marque(id, contient) {
+  const s = service(id);
+  const dessous = s.enfants.map(e => marque(e, contient)).some(x => x);
+  contient.set(id, dessous);
+  return dessous || s.notes.length > 0;
+}
+
+function branche(id, contient) {
+  const s = service(id);
+  const bloc = element("div", "branche");
+  const boite = element("div", "service");
+  const ouvert = ouverts.has(id) && s.enfants.length > 0;
+  const horizontal = ancetres(id).length % 2 === 0;
+  if (ouvert) bloc.classList.add("ouvert");
+  if (horizontal) bloc.classList.add("h");
+  if (s.supprime) bloc.classList.add("supprime");
+  if (s.notes.length) bloc.classList.add("modifie");
+  if (contient.get(id)) bloc.classList.add("contient");
+  if (id === choisi) bloc.classList.add("choisi");
+  const etiquette = element("span", "etiquette");
+  etiquette.append(element("span", "nom", s.nom));
+  boite.append(etiquette);
+  boite.addEventListener("click", () => clique(id));
+  if (s.enfants.length) {
+    const b = bouton(ouvert ? "[−]" : "[+]", e => {
+      e.stopPropagation();
+      if (ouvert) ouverts.delete(id);
+      else ouverts.add(id);
+      rend();
+    });
+    b.classList.add("bascule");
+    etiquette.append(b);
+  }
+  if (!s.supprime) {
+    boite.draggable = true;
+    boite.addEventListener("dragstart", e => {
+      glisse = id;
+      e.dataTransfer.effectAllowed = "move";
+    });
+    boite.addEventListener("dragend", () => { glisse = null; });
+    boite.addEventListener("dragover", e => {
+      if (!glisse || !rattachable(glisse, id)) return;
+      e.preventDefault();
+      bloc.classList.add("survol");
+    });
+    boite.addEventListener("dragleave", () => bloc.classList.remove("survol"));
+    boite.addEventListener("drop", e => {
+      e.preventDefault();
+      const deplace = glisse;
+      glisse = null;
+      ouverts.add(id);
+      enregistre({ op: "deplacer", id: deplace, parent: id });
+    });
+  }
+  bloc.append(boite);
+  if (ouvert) {
+    const rangee = element("div", horizontal ? "enfants horizontal" : "enfants vertical");
+    s.enfants.forEach(e => rangee.append(branche(e, contient)));
+    bloc.append(rangee);
+  }
+  return bloc;
+}
+
+function option(libelle, champs, action, extra) {
+  const f = element("form", "option");
+  const b = element("button", "", libelle);
+  b.type = "submit";
+  f.append(b);
+  const entrees = champs.map(c => {
+    const input = element("input");
+    input.type = "text";
+    input.placeholder = c.indication;
+    input.required = true;
+    if (c.cible) {
+      input.setAttribute("list", "noms");
+      input.addEventListener("focus", () => {
+        saisie = input;
+        arbre.classList.add("choix");
+      });
+    }
+    input.addEventListener("input", () => input.setCustomValidity(""));
+    f.append(input);
+    return input;
+  });
+  if (extra) f.append(extra);
+  f.addEventListener("submit", e => {
+    e.preventDefault();
+    action(entrees.map(i => i.value.trim()), entrees, f);
+  });
+  return f;
+}
+
+function resout(input, test) {
+  const trouve = cherche(input.value.trim());
+  if (trouve && test(trouve.id)) return trouve.id;
+  input.setCustomValidity("Service introuvable ou impossible");
+  input.reportValidity();
+  return null;
+}
+
+function cases(id) {
+  const ul = element("ul");
+  actifs(id).forEach(e => {
+    const li = element("li");
+    const label = element("label");
+    const c = element("input");
+    c.type = "checkbox";
+    c.value = e;
+    label.append(c, " " + nom(e));
+    li.append(label);
+    ul.append(li);
+  });
+  return ul;
+}
+
+function rendSelection() {
+  selection.innerHTML = "";
+  const id = choisi || RACINE;
+  const s = service(id);
+  const titre = element("h2", "", s.nom + " ");
+  if (!s.nouveau && id !== RACINE) {
+    const lien = element("a", "externe", "fiche");
+    lien.href = ANNUAIRE + id;
+    lien.target = "_blank";
+    titre.append(lien);
+  }
+  selection.append(titre);
+  if (s.notes.length) {
+    const ul = element("ul");
+    s.notes.forEach(n => ul.append(element("li", "", n)));
+    selection.append(ul);
+  }
+  if (s.supprime) return;
+  if (id === RACINE) {
+    selection.append(option("créer un ministère", [{ indication: "nom" }], ([v]) => enregistre({ op: "creer", id: identifiant(), nom: v, parent: RACINE })));
+    return;
+  }
+  if (s.enfants.length && id !== focus) selection.append(option("recentrer", [], () => recentre(id)));
+  selection.append(option("renommer", [{ indication: "nouveau nom" }], ([v]) => enregistre({ op: "renommer", id: id, nom: v })));
+  selection.append(option("créer un sous-service", [{ indication: "nom" }], ([v]) => {
+    ouverts.add(id);
+    enregistre({ op: "creer", id: identifiant(), nom: v, parent: id });
+  }));
+  const liste = actifs(id).length ? cases(id) : null;
+  const scission = option("scinder", [{ indication: "nom du nouveau service" }], ([v], entrees, f) => {
+    const enfants = [...f.querySelectorAll("input[type=checkbox]:checked")].map(c => c.value);
+    const nouveau = identifiant();
+    if (enfants.length) ouverts.add(nouveau);
+    enregistre({ op: "scinder", id: id, nouveau: nouveau, nom: v, enfants: enfants });
+  }, liste);
+  if (liste) {
+    liste.hidden = true;
+    scission.querySelector("input").addEventListener("input", e => { liste.hidden = !e.target.value; });
+  }
+  selection.append(scission);
+  selection.append(option("fusionner avec", [{ indication: "service", cible: true }, { indication: "nouveau nom" }], ([, v], entrees) => {
+    const autre = resout(entrees[0], b => fusionnable(id, b));
+    if (!autre) return;
+    const nouveau = identifiant();
+    ouvreChemin(id);
+    ouverts.add(nouveau);
+    enregistre({ op: "fusionner", id: nouveau, a: id, b: autre, nom: v });
+  }));
+  selection.append(option("rattacher à", [{ indication: "service", cible: true }], (valeurs, entrees) => {
+    const parent = resout(entrees[0], c => rattachable(id, c));
+    if (!parent) return;
+    ouvreChemin(id);
+    ouverts.add(parent);
+    enregistre({ op: "deplacer", id: id, parent: parent });
+  }));
+  selection.append(option("supprimer", [], () => enregistre({ op: "supprimer", id: id })));
+}
+
+function cible(op) {
+  return op.op === "scinder" ? op.nouveau : op.id;
+}
+
+function rendJournal() {
+  journal.innerHTML = "";
+  const titre = element("h2", "", "Modifications (" + operations.length + ")");
+  journal.append(titre);
+  if (!operations.length) {
+    const p = element("p", "", "Exemple : ");
+    const lien = element("a", "", "pôle ministériel de l'écologie");
+    lien.href = "#" + encodeURIComponent(JSON.stringify(EXEMPLE));
+    lien.addEventListener("click", e => {
+      e.preventDefault();
+      operations = EXEMPLE.slice();
+      construit();
+      history.replaceState(null, "", lien.href);
+      ouvreModifications();
+      montre(EXEMPLE[0].id);
+    });
+    p.append(lien);
+    journal.append(p);
+    return;
+  }
+  const bascule = bouton(journalOuvert ? "[−]" : "[+]", () => {
+    journalOuvert = !journalOuvert;
+    rend();
+  });
+  bascule.classList.add("bascule");
+  titre.append(bascule);
+  if (!journalOuvert) return;
+  const ol = element("ul");
+  descriptions.forEach((d, k) => {
+    const li = element("li");
+    const a = element("a", "", d);
+    a.addEventListener("click", () => montre(cible(operations[k])));
+    li.append(a);
+    ol.append(li);
+  });
+  journal.append(ol);
+  const actions = element("div", "actions");
+  actions.append(bouton("annuler la dernière", () => annule(1)));
+  actions.append(bouton("tout annuler", () => annule(operations.length)));
+  journal.append(actions);
+}
+
+function ouvreModifications() {
+  services.forEach(s => { if (s.notes.length) ouvreChemin(s.id); });
+  rend();
+}
+
+function rendNoms() {
+  const liste = document.getElementById("noms");
+  liste.innerHTML = "";
+  [...services.values()]
+    .filter(s => s.id !== RACINE && !s.supprime)
+    .map(s => s.nom)
+    .sort((a, b) => a.localeCompare(b, "fr"))
+    .forEach(n => liste.append(new Option(n)));
+}
+
+function rendAriane() {
+  ariane.innerHTML = "";
+  if (focus === RACINE) return;
+  ancetres(focus).reverse().forEach(a => {
+    const lien = element("a", "", nom(a));
+    lien.addEventListener("click", () => recentre(a));
+    ariane.append(lien, " › ");
+  });
+  ariane.append(nom(focus));
+}
+
+function cherche(texte) {
+  return [...services.values()].find(s => s.nom === texte && !s.supprime);
+}
+
+function rend() {
+  if (!services.has(focus)) focus = RACINE;
+  const contient = new Map();
+  marque(RACINE, contient);
+  arbre.innerHTML = "";
+  arbre.classList.remove("choix");
+  if (focus === RACINE) service(RACINE).enfants.forEach(e => arbre.append(branche(e, contient)));
+  else arbre.append(branche(focus, contient));
+  rendAriane();
+  rendSelection();
+  rendJournal();
+  rendNoms();
+}
+
+document.getElementById("recherche").addEventListener("change", e => {
+  const trouve = cherche(e.target.value);
+  if (!trouve) return;
+  e.target.value = "";
+  montre(trouve.id);
+});
+
+selection.addEventListener("focusin", e => {
+  if (e.target === saisie) return;
+  saisie = null;
+  arbre.classList.remove("choix");
+});
+
+arbre.addEventListener("dragover", e => {
+  const cadre = arbre.getBoundingClientRect();
+  const marge = 60;
+  const dx = e.clientX < cadre.left + marge ? -20 : (e.clientX > cadre.right - marge ? 20 : 0);
+  const dy = e.clientY < cadre.top + marge ? -20 : (e.clientY > cadre.bottom - marge ? 20 : 0);
+  arbre.scrollBy(dx, dy);
+});
+
+window.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (saisie) {
+    saisie = null;
+    arbre.classList.remove("choix");
+    return;
+  }
+  choisi = null;
+  rend();
+});
+
+function lit() {
+  try {
+    const valeur = JSON.parse(decodeURIComponent(location.hash.slice(1)));
+    return Array.isArray(valeur) ? valeur : [];
+  } catch (erreur) {
+    return [];
+  }
+}
+
+fetch("services.json")
+  .then(r => r.json())
+  .then(donnees => {
+    base = donnees;
+    operations = lit();
+    construit();
+    rend();
+  });
