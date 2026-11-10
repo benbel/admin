@@ -14,7 +14,6 @@ LISTE = re.compile(r'data-test="organisations-list".*?</ul>', re.S)
 REGROUPEMENT = re.compile(r'href="' + re.escape(ANNUAIRE) + r'/gouvernement/([0-9a-f-]{36})"[^>]*data-test="href-lien-ministeres"')
 TITRE = re.compile(r'<h1[^>]*id="(?:titlePage|contentTitle)"[^>]*>(.*?)</h1>', re.S)
 SORTIE = Path(__file__).parent.parent / "site" / "services.json"
-PROFONDEUR = 8
 PARALLELE = 6
 
 
@@ -45,30 +44,60 @@ def fiche(identifiant):
     return identifiant, texte(titre.group(1)) if titre else "", enfants(page)
 
 
+def sans_cycles(racines, enfants):
+    gardes = {identifiant: [] for identifiant in enfants}
+    etat = {}
+    for racine in racines:
+        if racine in etat:
+            continue
+        etat[racine] = "en cours"
+        pile = [(racine, iter(enfants[racine]))]
+        while pile:
+            noeud, suite = pile[-1]
+            enfant = next(suite, None)
+            if enfant is None:
+                etat[noeud] = "fini"
+                pile.pop()
+            elif etat.get(enfant) != "en cours":
+                gardes[noeud].append(enfant)
+                if enfant not in etat:
+                    etat[enfant] = "en cours"
+                    pile.append((enfant, iter(enfants[enfant])))
+    return gardes
+
+
 def collecte():
     ministeres = list(dict.fromkeys(LIEN.findall(telecharge(DEPART))))
-    services = {}
-    parents = {identifiant: None for identifiant in ministeres}
+    noms = {}
+    listes = {}
+    vus = set(ministeres)
     niveau = ministeres
+    profondeur = 0
     with ThreadPoolExecutor(PARALLELE) as executeur:
-        for profondeur in range(PROFONDEUR):
+        while niveau:
             suivant = []
             for identifiant, nom, liste in executeur.map(fiche, niveau):
-                services[identifiant] = {"nom": nom, "parent": parents[identifiant], "enfants": []}
+                noms[identifiant] = nom
+                listes[identifiant] = liste
                 for enfant in liste:
-                    if enfant not in parents:
-                        parents[enfant] = identifiant
+                    if enfant not in vus:
+                        vus.add(enfant)
                         suivant.append(enfant)
             print(profondeur, len(niveau), len(suivant), file=sys.stderr)
-            niveau = suivant if profondeur < PROFONDEUR - 1 else []
-    for identifiant, service in services.items():
-        if service["parent"] in services:
-            services[service["parent"]]["enfants"].append(identifiant)
+            niveau = suivant
+            profondeur += 1
+    valides = {identifiant for identifiant, nom in noms.items() if nom}
+    racines = [identifiant for identifiant in ministeres if identifiant in valides]
+    enfants = {
+        identifiant: [enfant for enfant in listes[identifiant] if enfant in valides]
+        for identifiant in valides
+        }
+    gardes = sans_cycles(racines, enfants)
     return [
-        {"id": identifiant, "nom": service["nom"], "enfants": service["enfants"]}
-        for identifiant, service in services.items()
-        if service["nom"]
-        ], ministeres
+        {"id": identifiant, "nom": noms[identifiant], "enfants": gardes[identifiant]}
+        for identifiant in noms
+        if identifiant in valides
+        ], racines
 
 
 def main():

@@ -123,6 +123,7 @@ aside section {
 }
 
 #ariane a,
+#selection p a,
 #journal li a {
   color: inherit;
 }
@@ -244,7 +245,8 @@ li::before {
   }
 }
 
-#ariane a {
+#ariane a,
+#selection p a {
   text-decoration: underline;
 }
 
@@ -263,4 +265,13 @@ input[type="checkbox"] {
 
 .option li::before {
   content: none;
+}
+
+.multiple > .service,
+.multiple.ouvert {
+  border-style: dashed;
+}
+
+.multiple.ouvert > .service {
+  border-style: none;
 }

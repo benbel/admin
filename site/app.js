@@ -51,22 +51,33 @@ function nom(id) {
   return id === RACINE ? "Gouvernement" : service(id).nom;
 }
 
-function ajoute(id, libelle, parent, apres) {
-  services.set(id, { id: id, nom: libelle, parent: parent, enfants: [], supprime: false, notes: [], nouveau: true });
+function attache(id, parent, apres) {
   const freres = service(parent).enfants;
-  const rang = apres ? freres.indexOf(apres) + 1 : freres.length;
+  const rang = apres && freres.includes(apres) ? freres.indexOf(apres) + 1 : freres.length;
   freres.splice(rang, 0, id);
+  service(id).parents.push(parent);
 }
 
-function detache(id) {
-  const freres = service(service(id).parent).enfants;
+function detache(id, parent) {
+  const freres = service(parent).enfants;
   freres.splice(freres.indexOf(id), 1);
+  const parents = service(id).parents;
+  parents.splice(parents.indexOf(parent), 1);
+}
+
+function ajoute(id, libelle, parents, apres) {
+  services.set(id, { id: id, nom: libelle, parents: [], enfants: [], supprime: false, notes: [], nouveau: true });
+  parents.forEach(p => attache(id, p, apres));
 }
 
 function rattache(id, parent) {
-  detache(id);
-  service(id).parent = parent;
-  service(parent).enfants.push(id);
+  service(id).parents.slice().forEach(p => detache(id, p));
+  attache(id, parent);
+}
+
+function remplaceParent(id, ancien, nouveau) {
+  detache(id, ancien);
+  if (!service(id).parents.includes(nouveau)) attache(id, nouveau);
 }
 
 function note(id, texte) {
@@ -75,31 +86,59 @@ function note(id, texte) {
 
 function supprime(id) {
   service(id).supprime = true;
-  service(id).enfants.forEach(supprime);
+  service(id).enfants.forEach(e => {
+    if (service(e).parents.every(p => service(p).supprime)) supprime(e);
+  });
 }
 
 function actifs(id) {
   return service(id).enfants.filter(e => !service(e).supprime);
 }
 
+function tutelles(id) {
+  return service(id).parents.filter(p => !service(p).supprime);
+}
+
+function parcourt(id, voisins) {
+  const vus = new Set();
+  const pile = [id];
+  while (pile.length) {
+    voisins(service(pile.pop())).forEach(v => {
+      if (!vus.has(v)) {
+        vus.add(v);
+        pile.push(v);
+      }
+    });
+  }
+  return vus;
+}
+
 function descendants(id) {
-  return service(id).enfants.flatMap(e => [e].concat(descendants(e)));
+  return parcourt(id, s => s.enfants);
 }
 
 function ancetres(id) {
+  return parcourt(id, s => s.parents);
+}
+
+function chemin(id) {
   const liste = [];
-  let courant = service(id).parent;
+  let courant = service(id).parents[0];
   while (courant) {
     liste.push(courant);
-    courant = service(courant).parent;
+    courant = service(courant).parents[0];
   }
   return liste;
+}
+
+function noms(ids) {
+  return ids.map(nom).join(", ");
 }
 
 function applique(op) {
   const s = service(op.id);
   if (op.op === "creer") {
-    ajoute(op.id, op.nom, op.parent);
+    ajoute(op.id, op.nom, [op.parent]);
     note(op.id, "créé");
     return "Création de " + op.nom;
   }
@@ -110,17 +149,29 @@ function applique(op) {
     return ancien + " devient " + op.nom;
   }
   if (op.op === "deplacer") {
-    const ancien = s.parent;
+    const anciens = s.parents.slice();
     rattache(op.id, op.parent);
-    note(op.id, "rattaché à " + nom(op.parent) + ", auparavant " + nom(ancien));
-    if (ancien !== RACINE) note(ancien, s.nom + " transféré à " + nom(op.parent));
+    note(op.id, "rattaché à " + nom(op.parent) + ", auparavant " + noms(anciens));
+    anciens.filter(a => a !== RACINE).forEach(a => note(a, s.nom + " transféré à " + nom(op.parent)));
     return s.nom + " → " + nom(op.parent);
+  }
+  if (op.op === "tutelle") {
+    attache(op.id, op.parent);
+    note(op.id, "également rattaché à " + nom(op.parent));
+    note(op.parent, "nouvelle tutelle sur " + s.nom);
+    return s.nom + " + " + nom(op.parent);
+  }
+  if (op.op === "detacher") {
+    detache(op.id, op.parent);
+    note(op.id, "n'est plus rattaché à " + nom(op.parent));
+    note(op.parent, "n'a plus la tutelle de " + s.nom);
+    return s.nom + " − " + nom(op.parent);
   }
   if (op.op === "fusionner") {
     const a = service(op.a), b = service(op.b);
-    ajoute(op.id, op.nom, a.parent, op.a);
+    ajoute(op.id, op.nom, a.parents.slice(), op.a);
     [a, b].forEach(x => {
-      actifs(x.id).forEach(e => rattache(e, op.id));
+      actifs(x.id).forEach(e => remplaceParent(e, x.id, op.id));
       supprime(x.id);
       note(x.id, "fusionné dans " + op.nom);
     });
@@ -128,8 +179,8 @@ function applique(op) {
     return "Fusion de " + a.nom + " et " + b.nom + " : " + op.nom;
   }
   if (op.op === "scinder") {
-    ajoute(op.nouveau, op.nom, s.parent, op.id);
-    op.enfants.forEach(e => rattache(e, op.nouveau));
+    ajoute(op.nouveau, op.nom, s.parents.slice(), op.id);
+    op.enfants.forEach(e => remplaceParent(e, op.id, op.nouveau));
     note(op.nouveau, "issu de " + s.nom);
     note(op.id, "scindé, " + op.nom + " créé");
     return "Scission de " + s.nom + " : " + op.nom;
@@ -144,10 +195,10 @@ function applique(op) {
 
 function construit() {
   services = new Map();
-  services.set(RACINE, { id: RACINE, nom: "Gouvernement", parent: null, enfants: base.racines.slice(), supprime: false, notes: [], nouveau: false });
-  base.services.forEach(b => services.set(b.id, { id: b.id, nom: b.nom, parent: null, enfants: b.enfants.slice(), supprime: false, notes: [], nouveau: false }));
+  services.set(RACINE, { id: RACINE, nom: "Gouvernement", parents: [], enfants: base.racines.slice(), supprime: false, notes: [], nouveau: false });
+  base.services.forEach(b => services.set(b.id, { id: b.id, nom: b.nom, parents: [], enfants: b.enfants.slice(), supprime: false, notes: [], nouveau: false }));
   services.forEach(s => { s.enfants = s.enfants.filter(e => services.has(e)); });
-  services.forEach(s => s.enfants.forEach(e => { service(e).parent = s.id; }));
+  services.forEach(s => s.enfants.forEach(e => service(e).parents.push(s.id)));
   descriptions = [];
   for (let k = 0; k < operations.length; k += 1) {
     try {
@@ -180,11 +231,11 @@ function annule(nombre) {
 }
 
 function ouvreChemin(id) {
-  ancetres(id).forEach(a => ouverts.add(a));
+  chemin(id).forEach(a => ouverts.add(a));
 }
 
 function dans(id, racine) {
-  return racine === RACINE || id === racine || ancetres(id).includes(racine);
+  return racine === RACINE || id === racine || ancetres(id).has(racine);
 }
 
 function recentre(id) {
@@ -208,11 +259,11 @@ function choisit(id) {
 }
 
 function rattachable(id, parent) {
-  return !service(parent).supprime && id !== parent && parent !== service(id).parent && !descendants(id).includes(parent);
+  return !service(parent).supprime && id !== parent && !service(id).parents.includes(parent) && !descendants(id).has(parent);
 }
 
 function fusionnable(a, b) {
-  return !service(b).supprime && a !== b && !descendants(a).includes(b) && !descendants(b).includes(a);
+  return !service(b).supprime && a !== b && !descendants(a).has(b) && !descendants(b).has(a);
 }
 
 function clique(id) {
@@ -228,20 +279,20 @@ function clique(id) {
 
 function marque(id, contient) {
   const s = service(id);
-  const dessous = s.enfants.map(e => marque(e, contient)).some(x => x);
-  contient.set(id, dessous);
-  return dessous || s.notes.length > 0;
+  if (!contient.has(id)) contient.set(id, s.enfants.map(e => marque(e, contient)).some(x => x));
+  return contient.get(id) || s.notes.length > 0;
 }
 
-function branche(id, contient) {
+function branche(id, contient, profondeur) {
   const s = service(id);
   const bloc = element("div", "branche");
   const boite = element("div", "service");
   const ouvert = ouverts.has(id) && s.enfants.length > 0;
-  const horizontal = ancetres(id).length % 2 === 0;
+  const horizontal = profondeur % 2 === 0;
   if (ouvert) bloc.classList.add("ouvert");
   if (horizontal) bloc.classList.add("h");
   if (s.supprime) bloc.classList.add("supprime");
+  if (tutelles(id).length > 1) bloc.classList.add("multiple");
   if (s.notes.length) bloc.classList.add("modifie");
   if (contient.get(id)) bloc.classList.add("contient");
   if (id === choisi) bloc.classList.add("choisi");
@@ -283,7 +334,7 @@ function branche(id, contient) {
   bloc.append(boite);
   if (ouvert) {
     const rangee = element("div", horizontal ? "enfants horizontal" : "enfants vertical");
-    s.enfants.forEach(e => rangee.append(branche(e, contient)));
+    s.enfants.forEach(e => rangee.append(branche(e, contient, profondeur + 1)));
     bloc.append(rangee);
   }
   return bloc;
@@ -353,6 +404,15 @@ function rendSelection() {
     titre.append(lien);
   }
   selection.append(titre);
+  if (tutelles(id).length > 1) {
+    const p = element("p", "", "Rattaché à : ");
+    tutelles(id).forEach((t, k) => {
+      const lien = element("a", "", nom(t));
+      lien.addEventListener("click", () => montre(t));
+      p.append(k ? ", " : "", lien);
+    });
+    selection.append(p);
+  }
   if (s.notes.length) {
     const ul = element("ul");
     s.notes.forEach(n => ul.append(element("li", "", n)));
@@ -396,6 +456,19 @@ function rendSelection() {
     ouverts.add(parent);
     enregistre({ op: "deplacer", id: id, parent: parent });
   }));
+  selection.append(option("ajouter une tutelle", [{ indication: "service", cible: true }], (valeurs, entrees) => {
+    const parent = resout(entrees[0], c => rattachable(id, c));
+    if (!parent) return;
+    ouverts.add(parent);
+    enregistre({ op: "tutelle", id: id, parent: parent });
+  }));
+  if (tutelles(id).length > 1) {
+    selection.append(option("retirer une tutelle", [{ indication: "service", cible: true }], (valeurs, entrees) => {
+      const parent = resout(entrees[0], c => tutelles(id).includes(c));
+      if (!parent) return;
+      enregistre({ op: "detacher", id: id, parent: parent });
+    }));
+  }
   selection.append(option("supprimer", [], () => enregistre({ op: "supprimer", id: id })));
 }
 
@@ -463,7 +536,7 @@ function rendNoms() {
 function rendAriane() {
   ariane.innerHTML = "";
   if (focus === RACINE) return;
-  ancetres(focus).reverse().forEach(a => {
+  chemin(focus).reverse().forEach(a => {
     const lien = element("a", "", nom(a));
     lien.addEventListener("click", () => recentre(a));
     ariane.append(lien, " › ");
@@ -481,8 +554,8 @@ function rend() {
   marque(RACINE, contient);
   arbre.innerHTML = "";
   arbre.classList.remove("choix");
-  if (focus === RACINE) service(RACINE).enfants.forEach(e => arbre.append(branche(e, contient)));
-  else arbre.append(branche(focus, contient));
+  if (focus === RACINE) service(RACINE).enfants.forEach(e => arbre.append(branche(e, contient, 1)));
+  else arbre.append(branche(focus, contient, chemin(focus).length));
   rendAriane();
   rendSelection();
   rendJournal();
