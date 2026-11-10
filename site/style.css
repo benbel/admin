@@ -107,7 +107,6 @@ li::before {
 
 .vertical {
   flex-direction: column;
-  padding-left: 1.5em;
 }
 
 .service {
@@ -119,10 +118,18 @@ li::before {
   cursor: pointer;
 }
 
-.ouvert.h > .service {
+.ouvert {
+  padding: 0.4em 0.6em 0.6em;
+  border: 1px solid #bbbbbb;
+  border-radius: 6px;
+}
+
+.ouvert > .service {
   max-width: none;
   width: 0;
   min-width: 100%;
+  padding: 0;
+  border: 0;
   box-sizing: border-box;
 }
 
@@ -130,6 +137,10 @@ li::before {
   display: inline-block;
   position: sticky;
   left: 0.6em;
+}
+
+.ouvert > .service .etiquette {
+  left: 1.2em;
 }
 
 .bascule {
@@ -150,7 +161,8 @@ li::before {
   color: #286c44;
 }
 
-.choisi > .service {
+.choisi > .service,
+.choisi.ouvert {
   border-color: #111111;
 }
 
@@ -159,7 +171,8 @@ li::before {
 }
 
 .cible > .service:hover,
-.survol > .service {
+.survol > .service,
+.survol.ouvert {
   border-color: #286c44;
 }
 
